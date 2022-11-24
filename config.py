@@ -2,12 +2,14 @@ from helpers.dataclasses import Question
 
 
 BOT_TOKEN: str = (
-    "cool"
+    "token"
 )
 EXTENSIONS: list[str] = ["extensions.quiz"]
 
-ENGLISH_ROLE_ID: int = 00000000000000
-MATH_ROLE_ID: int = 00000000000000
+ALLOWED_ROLE = 0000000000000
+
+ENGLISH_ROLE_ID: int = 0000000000000
+MATH_ROLE_ID: int = 0000000000000
 
 ENGLISH_QUESTION_1: Question = Question.with_answers(
     "What is adding two numbers together called?",
