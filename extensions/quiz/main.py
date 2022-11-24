@@ -141,6 +141,7 @@ class MainCog(commands.Cog):
         )  # This makes the Math Start Button persistent
 
     @commands.group()  # This creates a group command which you can use like this: `!start`
+    @commands.has_role(config.ALLOWED_ROLE)
     async def start(self, ctx: commands.Context) -> Message | None:
         if ctx.invoked_subcommand:
             return
@@ -184,3 +185,16 @@ class MainCog(commands.Cog):
         return await ctx.send(
             embed=embed, view=MathStart(questions=config.MATH_QUESTIONS)
         )
+
+    @start.error
+    async def start_error(self, ctx: commands.Context, error) -> Message:
+        embed: Embed = Embed(
+            title="❌ Quiz - Error",
+            description="An error has occurred while trying to execute the `!start` command.\n"
+            "```prolog\n"
+            f"{error}\n"
+            "```\n",
+            color=discord.Color.red(),
+        )
+
+        return await ctx.send(embed=embed)
