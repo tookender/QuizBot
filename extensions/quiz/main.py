@@ -1,56 +1,11 @@
 import random
 from copy import copy
-from dataclasses import dataclass
 
 import discord
-from discord import Embed, Message, Role
+from discord import Embed, Message
 from discord.ext import commands
-from typing_extensions import Self
-
-
-@dataclass
-class Answer:
-    text: str
-    index: int
-    is_correct: bool = False
-
-    def __str__(self) -> str:
-        return self.text
-
-
-@dataclass
-class Question:
-    question: str
-    answers: list[Answer]
-
-    @classmethod
-    def with_answers(cls, question: str, answers: list[str], correct: str) -> Self:
-        if correct not in answers:
-            raise RuntimeError("No correct answer.")
-
-        random.shuffle(answers)
-
-        ret: list[Answer] = [
-            Answer(text=a, index=idx, is_correct=a == correct)
-            for idx, a in enumerate(answers, start=1)
-        ]
-
-        return cls(question, ret)
-
-
-question1: Question = Question.with_answers(
-    "What is 1+1?", answers=["2", "3", "4", "5"], correct="2"
-)
-
-question2: Question = Question.with_answers(
-    "What is 1+2?", answers=["2", "3", "4", "5"], correct="3"
-)
-
-question3: Question = Question.with_answers(
-    "What is 1+3?", answers=["2", "3", "4", "5"], correct="4"
-)
-
-questions: list[Question] = [question1, question2, question3]
+from helpers.dataclasses import Answer, Question
+import config
 
 
 class Button(discord.ui.Button["Questionnaire"]):
@@ -77,9 +32,12 @@ class Button(discord.ui.Button["Questionnaire"]):
 
 
 class Questionnaire(discord.ui.View):
-    def __init__(self, owner: discord.abc.User, questions: list[Question]) -> None:
+    def __init__(
+        self, owner: discord.abc.User, role: discord.Role, questions: list[Question]
+    ) -> None:
         super().__init__()
         self.owner: discord.abc.User = owner
+        self.role: discord.Role = role
         qst: list[Question] = copy(questions)
         random.shuffle(qst)
         self.questions: list[Question] = qst
@@ -126,27 +84,45 @@ class Questionnaire(discord.ui.View):
             )
 
             await interaction.response.edit_message(embed=embed, view=None)
-
-            role: Role | None = interaction.guild.get_role(0000000000000000000)  # type: ignore
-            await interaction.user.add_roles(role)  # type: ignore
+            await interaction.user.add_roles(self.role)  # type: ignore
 
     async def interaction_check(self, interaction: discord.Interaction, /) -> bool:
         return self.owner == interaction.user
 
 
-class Start(discord.ui.View):
+class EnglishStart(discord.ui.View):
     def __init__(self, questions: list[Question]) -> None:
         self.questions: list[Question] = questions
         super().__init__(timeout=None)
 
     @discord.ui.button(
-        label="Start", style=discord.ButtonStyle.green, custom_id="start-button"
+        label="Start", style=discord.ButtonStyle.green, custom_id="english:start-button"
     )
     async def start(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ) -> None:
         view: Questionnaire = Questionnaire(
             owner=interaction.user,
+            role=interaction.guild.get_role(config.ENGLISH_ROLE_ID),  # type: ignore
+            questions=self.questions,
+        )
+        await view.start(interaction=interaction)
+
+
+class MathStart(discord.ui.View):
+    def __init__(self, questions: list[Question]) -> None:
+        self.questions: list[Question] = questions
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="Start", style=discord.ButtonStyle.green, custom_id="math:start-button"
+    )
+    async def start(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        view: Questionnaire = Questionnaire(
+            owner=interaction.user,
+            role=interaction.guild.get_role(config.MATH_ROLE_ID),  # type: ignore
             questions=self.questions,
         )
         await view.start(interaction=interaction)
@@ -157,16 +133,54 @@ class MainCog(commands.Cog):
         self.bot: commands.Bot = bot
 
     async def cog_load(self) -> None:
-        self.bot.add_view(Start(questions))
+        self.bot.add_view(
+            EnglishStart(config.ENGLISH_QUESTIONS)
+        )  # This makes the English Start button persistent
+        self.bot.add_view(
+            MathStart(config.MATH_QUESTIONS)
+        )  # This makes the Math Start Button persistent
 
-    @commands.command()
-    async def start(self, ctx) -> Message:
+    @commands.group()  # This creates a group command which you can use like this: `!start`
+    async def start(self, ctx: commands.Context) -> Message | None:
+        if ctx.invoked_subcommand:
+            return
+
         embed: Embed = Embed(
-            title="❓ Quiz",
-            description="Click on the **`Start`** button below to start the quiz.\n"
-            "To pass, you must answer **ALL** questions correctly.",
+            title="❓ Quiz - Help",
+            description="Welcome to the quiz command!\n"
+            "This command allows you to start a quiz.\n"
+            f"To start the English quiz, use `{ctx.prefix}start english`.\n"
+            f"To start the Math quiz, use `{ctx.prefix}start math`.",
             color=discord.Color.teal(),
         )
 
+        embed.set_footer(text="Happy quizzing 🎉")
+        return await ctx.send(embed=embed)
+
+    @start.command()  # This creates a subcommand of the start command which you can use like this: `!start english`
+    async def english(self, ctx: commands.Context) -> Message:
+        embed: Embed = Embed(
+            title="❓ English Quiz",
+            description="Click on the **`Start`** button below to start the English quiz.\n"
+            "To pass, you must answer **ALL** questions correctly.",
+            color=discord.Color.yellow(),
+        )
+
         embed.set_footer(text="Good luck 🍀")
-        return await ctx.send(embed=embed, view=Start(questions=questions))
+        return await ctx.send(
+            embed=embed, view=EnglishStart(questions=config.ENGLISH_QUESTIONS)
+        )
+
+    @start.command()  # This creates a subcommand of the start command which you can use like this: `!start english`
+    async def math(self, ctx: commands.Context) -> Message:
+        embed: Embed = Embed(
+            title="❓ Math Quiz",
+            description="Click on the **`Start`** button below to start the math quiz.\n"
+            "To pass, you must answer **ALL** questions correctly.",
+            color=discord.Color.blurple(),
+        )
+
+        embed.set_footer(text="Good luck 🍀")
+        return await ctx.send(
+            embed=embed, view=MathStart(questions=config.MATH_QUESTIONS)
+        )
